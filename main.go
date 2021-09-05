@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -11,60 +10,73 @@ import (
 )
 
 const example = `
-location /$location_var{
-	alias $path;
+location /%location{
+	alias %path;
 }
 
 запуск 
-	nginx_configurator -s example.conf -v location_var:testHost,path:/root
+	nginx_configurator -s=.\templates\alias.conf -o=.\out\alias.conf -location=test -path=root
 вернет
 
-location /testHost{
+location /test{
 	alias /root;
 }`
 
 func main() {
-	SampleFile := flag.String("s", "alias.conf", "файл шаблона")
-	OutputFile := flag.String("o", "", "output path")
-	Example := flag.Bool("example", false, "помощь по утилите")
-	vars := flag.String("v", "", "переменные в формате ключ:значение,ключ:значение")
-	flag.Parse()
+	var Example bool
+	var SampleFile string
+	var OutputFile string
+	var Vars = make(map[string]string, 0)
+	for _, arg := range os.Args[1:] {
+		arg = strings.TrimLeft(arg, "-")
+		split := strings.Split(arg, "=")
+		switch split[0] {
+		case "example":
+			Example = true
+		case "s":
+			if len(split) == 2 {
+				SampleFile = split[1]
+			}
+		case "o":
+			if len(split) == 2 {
+				OutputFile = split[1]
+			}
+		default:
+			if len(split) == 2 {
+				Vars[split[0]] = split[1]
+			}
+		}
+	}
 
-	if *Example {
+	if Example {
 		fmt.Println(example)
 		return
 	}
 
-	patternBytes, err := ioutil.ReadFile(*SampleFile)
+	patternBytes, err := ioutil.ReadFile(SampleFile)
 	if err != nil {
 		log.Fatal(err)
 	}
 	pattern := string(patternBytes)
 
 	var writer io.Writer
-	if *OutputFile == "" {
+	if OutputFile == "" {
 		writer = os.Stdout
 	} else {
-		if _, err := os.Stat(*OutputFile); err == nil {
+		if _, err := os.Stat(OutputFile); err == nil {
 			log.Fatal("file already exist")
 		} else if os.IsNotExist(err) {
-			writer, err = os.OpenFile(*OutputFile, os.O_CREATE|os.O_SYNC, 0777)
+			writer, err = os.OpenFile(OutputFile, os.O_CREATE|os.O_SYNC, 0777)
 			if err != nil {
 				log.Fatal(err)
 			}
 		}
 	}
 
-	for _, duo := range strings.Split(*vars, ",") {
-		splitDuo := strings.Split(duo, ":")
-		if len(splitDuo) != 2 {
-			continue
-		}
+	for key, value := range Vars {
 
-		key, value := splitDuo[0], splitDuo[1]
-
-		pattern = strings.ReplaceAll(pattern,"$"+key,value)
+		pattern = strings.ReplaceAll(pattern, "%"+key, value)
 	}
 
-	fmt.Fprint(writer,string(pattern))
+	fmt.Fprint(writer, string(pattern))
 }
